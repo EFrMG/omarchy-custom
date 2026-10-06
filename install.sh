@@ -10,6 +10,7 @@
 #   --dry-run            print what would be done, change nothing
 #   --no-enable          copy files but don't select the theme
 #   --keep-autologin     don't remove /etc/sddm.conf.d/autologin.conf
+#   --skip-lint          don't run qmllint (it segfaults on some files)
 #
 # User options (so one call does everything):
 #   --add-user <name>    create the user (or update groups if it exists)
@@ -67,11 +68,13 @@ GROUPS_GIVEN=0
 GRANT_SUDO=0
 GRANT_SUDO_NOPASSWD=0
 SKIP_PASSWORD=0
+SKIP_LINT=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --dry-run) DRY_RUN=1; shift ;;
     --no-enable) ENABLE=0; shift ;;
     --keep-autologin) KEEP_AUTOLOGIN=1; shift ;;
+    --skip-lint) SKIP_LINT=1; shift ;;
     --add-user)
       [[ $# -ge 2 ]] || die "--add-user needs a username argument"
       ADD_USER="$2"; shift 2 ;;
@@ -81,7 +84,7 @@ while [[ $# -gt 0 ]]; do
     --sudo) GRANT_SUDO=1; shift ;;
     --sudo-nopasswd) GRANT_SUDO_NOPASSWD=1; shift ;;
     --skip-password) SKIP_PASSWORD=1; shift ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) die "unknown flag: $1" ;;
     *) break ;;
@@ -110,9 +113,11 @@ for f in Main.qml metadata.desktop theme.conf; do
   [[ -f "$SRC_DIR/$f" ]] || die "missing source file: $SRC_DIR/$f"
 done
 
-if command -v qmllint >/dev/null 2>&1; then
+if [[ $SKIP_LINT -eq 1 ]]; then
+  log "skipping QML lint (--skip-lint)"
+elif command -v qmllint >/dev/null 2>&1; then
   if ! qmllint "$SRC_DIR/Main.qml"; then
-    die "qmllint failed on Main.qml"
+    die "qmllint failed on Main.qml (retry with --skip-lint if qmllint itself crashed)"
   fi
 else
   log "qmllint not found, skipping QML lint"

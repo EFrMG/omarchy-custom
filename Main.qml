@@ -8,18 +8,32 @@ Rectangle {
   color: "#1a1b26"
 
   property bool loginFailed: false
-  property bool userExpanded: false
-  property bool sessionExpanded: false
+  property bool userPicked: false
+  // Login name comes only from the users dropdown (no username text field).
+  // QML cannot index a QAbstractListModel, so userModel is mirrored into a
+  // plain ListModel once at startup and read back with get(index).
+  property string selectedName: (userCombo.index >= 0 && userCombo.index < userPickModel.count) ? userPickModel.get(userCombo.index).name : ""
 
-  function doLogin() {
-    var user = nameField.text
-    var idx = sessionList.currentIndex >= 0 ? sessionList.currentIndex : sessionModel.lastIndex
-    if (user === "") {
-      root.loginFailed = true
-      nameField.focus = true
+  function selectLastUser() {
+    if (userPicked || userPickModel.count === 0) {
       return
     }
-    sddm.login(user, password.text, idx)
+    for (var i = 0; i < userPickModel.count; i++) {
+      if (userPickModel.get(i).name === userModel.lastUser) {
+        userCombo.index = i
+        return
+      }
+    }
+    userCombo.index = 0
+  }
+
+  function doLogin() {
+    if (selectedName === "") {
+      root.loginFailed = true
+      userCombo.focus = true
+      return
+    }
+    sddm.login(selectedName, password.text, sessionCombo.index)
   }
 
   Connections {
@@ -34,6 +48,44 @@ Rectangle {
     }
   }
 
+  // NOTE: SDDM userModel roles are name/realName/icon — NOT Qt.DisplayRole,
+  // so delegates must use model.name (model.display is empty).
+  ListModel {
+    id: userPickModel
+    onCountChanged: selectLastUser()
+  }
+
+  Item {
+    Repeater {
+      model: userModel
+      delegate: Item {
+        property string userName: (model.name !== undefined && model.name !== "") ? model.name : model.display
+        property string userLabel: (model.realName !== undefined && model.realName !== "") ? model.realName : userName
+        Component.onCompleted: {
+          if (userName !== undefined && userName !== "") {
+            userPickModel.append({ "name": userName, "label": userLabel })
+          }
+        }
+      }
+    }
+  }
+
+  // Row delegate shared by the users ComboBox top row and its popup rows.
+  // parent is the ComboBox internal Loader, which carries modelItem.
+  Component {
+    id: userRow
+    Text {
+      anchors.fill: parent
+      anchors.margins: 5
+      verticalAlignment: Text.AlignVCenter
+      color: "#c0caf5"
+      font.family: "JetBrainsMono Nerd Font"
+      font.pixelSize: 14
+      elide: Text.ElideRight
+      text: parent.modelItem.label
+    }
+  }
+
   // --- Center: omarchy login ---
   Column {
     id: loginColumn
@@ -43,33 +95,9 @@ Rectangle {
     Image {
       id: logo
       source: "logo.png"
-      width: 280
+      width: 400
       fillMode: Image.PreserveAspectFit
       anchors.horizontalCenter: parent.horizontalCenter
-    }
-
-    Text {
-      anchors.horizontalCenter: parent.horizontalCenter
-      text: nameField.text + " @ " + (sessionList.currentItem ? sessionList.currentItem.sessionName : "")
-      color: "#565f89"
-      font.family: "JetBrainsMono Nerd Font"
-      font.pixelSize: 14
-    }
-
-    // Editable username: works even if the user model is slow/empty.
-    TextBox {
-      id: nameField
-      anchors.horizontalCenter: parent.horizontalCenter
-      width: entry.width
-      height: 30
-      text: userModel.lastUser
-      font.pixelSize: 14
-      Keys.onPressed: {
-        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-          doLogin()
-          event.accepted = true
-        }
-      }
     }
 
     Row {
@@ -140,188 +168,79 @@ Rectangle {
       }
     }
 
-    // Picker buttons: users and sessions live behind dropdowns.
+    // Native SDDM ComboBoxes, like elarun/maldives/maya use: each opens its
+    // list immediately underneath itself. The overlay chevron is purely
+    // visual (no MouseArea), so clicks pass through to the ComboBox.
     Row {
       id: pickerRow
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: 12
 
-      Rectangle {
-        id: userButton
+      Item {
         width: 170
         height: 34
-        radius: 6
-        color: root.userExpanded ? "#334155" : "#24283b"
-        Text {
-          anchors.centerIn: parent
-          text: (nameField.text !== "" ? nameField.text : "user") + " \u25BE"
-          color: "#c0caf5"
+
+        ComboBox {
+          id: userCombo
+          anchors.fill: parent
+          model: userPickModel
+          color: "#24283b"
+          borderColor: "#334155"
+          borderWidth: 1
+          focusColor: "#7aa2f7"
+          hoverColor: "#334155"
+          textColor: "#c0caf5"
+          menuColor: "#24283b"
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
-          elide: Text.ElideRight
-          width: parent.width - 20
-          horizontalAlignment: Text.AlignHCenter
+          rowDelegate: userRow
+          onValueChanged: root.userPicked = true
         }
-        MouseArea {
-          anchors.fill: parent
-          onClicked: {
-            root.userExpanded = !root.userExpanded
-            root.sessionExpanded = false
-          }
+
+        Text {
+          anchors.right: parent.right
+          anchors.rightMargin: 10
+          anchors.verticalCenter: parent.verticalCenter
+          text: "\u25BC"
+          color: "#7aa2f7"
+          font.pixelSize: 12
         }
       }
 
-      Rectangle {
-        id: sessionButton
+      Item {
         width: 170
         height: 34
-        radius: 6
-        color: root.sessionExpanded ? "#334155" : "#24283b"
-        Text {
-          anchors.centerIn: parent
-          text: (sessionList.currentItem ? sessionList.currentItem.sessionName : "session") + " \u25BE"
-          color: "#c0caf5"
+
+        ComboBox {
+          id: sessionCombo
+          anchors.fill: parent
+          model: sessionModel
+          index: sessionModel.lastIndex
+          color: "#24283b"
+          borderColor: "#334155"
+          borderWidth: 1
+          focusColor: "#7aa2f7"
+          hoverColor: "#334155"
+          textColor: "#c0caf5"
+          menuColor: "#24283b"
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
-          elide: Text.ElideRight
-          width: parent.width - 20
-          horizontalAlignment: Text.AlignHCenter
         }
-        MouseArea {
-          anchors.fill: parent
-          onClicked: {
-            root.sessionExpanded = !root.sessionExpanded
-            root.userExpanded = false
-          }
-        }
-      }
-    }
-  }
 
-  // NOTE: SDDM userModel roles are name/realName/icon — NOT Qt.DisplayRole,
-  // so delegates must use model.name (model.display is empty).
-  Rectangle {
-    id: userDropdown
-    visible: root.userExpanded
-    width: 250
-    height: Math.min(userList.contentHeight + 62, 270)
-    color: "#24283b"
-    radius: 8
-    z: 10
-    anchors.top: pickerRow.bottom
-    anchors.topMargin: 8
-    anchors.horizontalCenter: userButton.horizontalCenter
-
-    Column {
-      anchors.fill: parent
-      anchors.margins: 12
-      spacing: 8
-      Text {
-        text: "users"
-        color: "#7aa2f7"
-        font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: 14
-      }
-      ListView {
-        id: userList
-        width: parent.width
-        height: parent.height - 30
-        clip: true
-        model: userModel
-        spacing: 4
-        delegate: Rectangle {
-          property string userName: (model.name !== undefined && model.name !== "") ? model.name : model.display
-          width: userList.width
-          height: 32
-          radius: 6
-          color: userList.currentIndex === index ? "#334155" : "transparent"
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            text: (model.realName !== undefined && model.realName !== "") ? model.realName : parent.userName
-            color: userList.currentIndex === index ? "#ffffff" : "#c0caf5"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            elide: Text.ElideRight
-            width: parent.width - 20
-          }
-          MouseArea {
-            anchors.fill: parent
-            onClicked: {
-              userList.currentIndex = index
-              nameField.text = parent.userName
-              root.loginFailed = false
-              root.userExpanded = false
-              password.focus = true
-            }
-          }
-        }
-      }
-    }
-  }
-
-  Rectangle {
-    id: sessionDropdown
-    visible: root.sessionExpanded
-    width: 250
-    height: Math.min(sessionList.contentHeight + 62, 270)
-    color: "#24283b"
-    radius: 8
-    z: 10
-    anchors.top: pickerRow.bottom
-    anchors.topMargin: 8
-    anchors.horizontalCenter: sessionButton.horizontalCenter
-
-    Column {
-      anchors.fill: parent
-      anchors.margins: 12
-      spacing: 8
-      Text {
-        text: "sessions"
-        color: "#7aa2f7"
-        font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: 14
-      }
-      ListView {
-        id: sessionList
-        width: parent.width
-        height: parent.height - 30
-        clip: true
-        model: sessionModel
-        currentIndex: sessionModel.lastIndex
-        spacing: 4
-        delegate: Rectangle {
-          property string sessionName: (model.name !== undefined && model.name !== "") ? model.name : model.display
-          width: sessionList.width
-          height: 32
-          radius: 6
-          color: sessionList.currentIndex === index ? "#334155" : "transparent"
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            text: parent.sessionName
-            color: sessionList.currentIndex === index ? "#ffffff" : "#c0caf5"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            elide: Text.ElideRight
-            width: parent.width - 20
-          }
-          MouseArea {
-            anchors.fill: parent
-            onClicked: {
-              sessionList.currentIndex = index
-              root.sessionExpanded = false
-              password.focus = true
-            }
-          }
+        Text {
+          anchors.right: parent.right
+          anchors.rightMargin: 10
+          anchors.verticalCenter: parent.verticalCenter
+          text: "\u25BC"
+          color: "#7aa2f7"
+          font.pixelSize: 12
         }
       }
     }
   }
 
   Component.onCompleted: {
+    selectLastUser()
     password.forceActiveFocus()
   }
 }
