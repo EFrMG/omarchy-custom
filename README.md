@@ -107,3 +107,7 @@ confirm, done:
 ![home choice](screenshots/16-remove-home.png)
 ![confirm](screenshots/17-remove-confirm.png)
 ![done](screenshots/18-remove-done.png)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
