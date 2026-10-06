@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# omarchy:summary=Set a user's sudo level: password, passwordless, or none
+# omarchy:args=[username] [--level password|nopasswd|none] [--yes]
+# omarchy:examples=omarchy-set-privileges | omarchy-set-privileges alice --level nopasswd --yes
+
+set -euo pipefail
+
+PROG="omarchy-set-privileges"
+ASSUME_YES=0
+USERNAME=""
+LEVEL=""
+
+fail() {
+  echo "$PROG: $*" >&2
+  exit 1
+}
+
+interactive() {
+  [[ -t 0 && -t 1 ]]
+}
+
+show_logo() {
+  if interactive && [[ -n ${OMARCHY_PATH:-} && -f $OMARCHY_PATH/logo.txt ]]; then
+    echo -e "\033[32m"
+    cat <"$OMARCHY_PATH/logo.txt"
+    echo -e "\033[0m"
+    echo
+  fi
+}
+
+confirm() {
+  local prompt="$1"
+  (( ASSUME_YES )) && return 0
+  if interactive; then
+    gum confirm "$prompt"
+  else
+    fail "refusing to continue without confirmation; pass --yes"
+  fi
+}
+
+need_gum() {
+  command -v gum >/dev/null 2>&1 || fail "gum is required for the interactive menu"
+}
+
+login_users() {
+  getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1 }' | sort
+}
+
+while (( $# > 0 )); do
+  case "$1" in
+  --level)
+    [[ -n ${2:-} && $2 != -* ]] || fail "--level needs one of: password, nopasswd, none"
+    LEVEL="$2"
+    shift 2
+    ;;
+  --yes | -y)
+    ASSUME_YES=1
+    shift
+    ;;
+  -h | --help)
+    echo "Usage: $PROG [username] [--level password|nopasswd|none] [--yes]"
+    echo
+    echo "Sets a user's sudo level through a validated /etc/sudoers.d/<username>"
+    echo "drop-in: password sudo, passwordless sudo, or no sudo grant."
+    echo "'none' removes the drop-in only when it is clearly ours (a rule for"
+    echo "that user); anything else is left alone with a warning."
+    echo
+    echo "With no arguments it walks you through each step with gum."
+    exit 0
+    ;;
+  -*)
+    fail "unknown option: $1 (try --help)"
+    ;;
+  *)
+    [[ -z $USERNAME ]] || fail "unexpected argument: $1"
+    USERNAME="$1"
+    shift
+    ;;
+  esac
+done
+
+[[ -z $LEVEL || $LEVEL == password || $LEVEL == nopasswd || $LEVEL == none ]] ||
+  fail "--level must be one of: password, nopasswd, none"
+
+show_logo
+
+if [[ -z $USERNAME ]]; then
+  interactive || fail "a username is required"
+  need_gum
+  USERNAME=$(login_users | gum choose --header="Set privileges for which user?") || fail "cancelled"
+  [[ -n $USERNAME ]] || fail "nothing selected"
+fi
+id "$USERNAME" &>/dev/null || fail "no such user: $USERNAME"
+
+if [[ -z $LEVEL ]]; then
+  interactive || fail "--level is required (password, nopasswd, none)"
+  need_gum
+  choice=$(gum choose --header="Sudo level for $USERNAME?" "Password sudo" "Passwordless sudo" "No sudo") || fail "cancelled"
+  case "$choice" in
+  "Password sudo") LEVEL="password" ;;
+  "Passwordless sudo") LEVEL="nopasswd" ;;
+  *) LEVEL="none" ;;
+  esac
+fi
+
+sudoers_file="/etc/sudoers.d/$USERNAME"
+
+if [[ $LEVEL == "none" ]]; then
+  if sudo test -f "$sudoers_file"; then
+    if sudo grep -qE "^$USERNAME ALL=" "$sudoers_file"; then
+      echo "About to remove sudo grant $sudoers_file."
+      confirm "Remove sudo for $USERNAME?" || fail "aborted"
+      sudo rm -f -- "$sudoers_file"
+      echo "Sudo removed for $USERNAME."
+    else
+      fail "$sudoers_file is not a rule for $USERNAME - review it manually"
+    fi
+  else
+    echo "$USERNAME has no sudoers drop-in; nothing to remove."
+  fi
+  exit 0
+fi
+
+if [[ $LEVEL == "nopasswd" ]]; then
+  sudoers_line="$USERNAME ALL=(ALL) NOPASSWD: ALL"
+else
+  sudoers_line="$USERNAME ALL=(ALL) ALL"
+fi
+
+echo
+echo "About to set:"
+echo "  user:  $USERNAME"
+echo "  level: $LEVEL"
+confirm "Grant $LEVEL sudo to $USERNAME?" || fail "aborted"
+
+printf '%s\n' "$sudoers_line" | sudo tee "$sudoers_file" >/dev/null
+sudo chmod 440 -- "$sudoers_file"
+sudo visudo -c
+echo "Sudo ($LEVEL) granted to $USERNAME via $sudoers_file."

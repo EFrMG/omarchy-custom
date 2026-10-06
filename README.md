@@ -47,3 +47,27 @@ sudo systemctl restart sddm
 
 See [multi-user.md](multi-user.md) for multi-user setup: adding users with
 groups/sudo, disabling autologin, and troubleshooting.
+
+## User admin scripts (`bin/`)
+
+Standalone admin tools in the Omarchy CLI style (gum TUI, `omarchy:` metadata,
+logo via `omarchy-show-logo` when on Omarchy). Separate flow from `install.sh`,
+written so they could be proposed upstream:
+
+| Script | Does |
+| ------ | ---- |
+| `bin/omarchy-add-user` | Create a user: gum prompts for name, group checklist, sudo level, then `passwd` |
+| `bin/omarchy-remove-user` | Remove a user (never root/system/self), optionally home + managed sudo grant |
+| `bin/omarchy-set-privileges` | Set sudo level: `password`, `nopasswd`, or `none` (validated drop-in) |
+| `bin/omarchy-change-groups` | Change supplementary groups: checklist, `--add`, `--remove`, or `--set` |
+
+```bash
+./bin/omarchy-add-user                        # fully interactive
+./bin/omarchy-add-user alice --groups wheel --sudo --yes   # scripted
+./bin/omarchy-set-privileges alice --level nopasswd --yes
+./bin/omarchy-change-groups alice --add docker --yes
+./bin/omarchy-remove-user alice --remove-home --yes
+```
+
+Every destructive step confirms (bypass with `--yes`); every sudoers write is
+`visudo -c` validated. Run `--help` on any script for its usage.
