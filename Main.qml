@@ -95,7 +95,7 @@ Rectangle {
     Image {
       id: logo
       source: "logo.png"
-      width: 400
+      width: 700
       fillMode: Image.PreserveAspectFit
       anchors.horizontalCenter: parent.horizontalCenter
     }
