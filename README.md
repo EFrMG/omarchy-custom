@@ -1,6 +1,7 @@
 # omarchy-custom
 
-SDDM theme cloned from Omarchy, with user list (left) and session list (right).
+SDDM theme cloned from Omarchy, with user and session dropdowns under a
+centered login.
 
 ![omarchy-custom greeter](preview.png)
 

@@ -130,9 +130,9 @@ journalctl -u sddm -e --no-pager
 loginctl list-sessions
 ```
 
-You should get the three-column greeter (users left, login center, sessions
-right). Log in once per user to lock in `RememberLastUser/LastSession`
-(set by `99-omarchy-login.conf` — keep it).
+You should get the centered login (bigger logo, username + password) with
+user and session dropdowns underneath. Log in once per user to lock in
+`RememberLastUser/LastSession` (set by `99-omarchy-login.conf` — keep it).
 
 ## 6. Troubleshooting
 

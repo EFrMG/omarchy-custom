@@ -8,6 +8,8 @@ Rectangle {
   color: "#1a1b26"
 
   property bool loginFailed: false
+  property bool userExpanded: false
+  property bool sessionExpanded: false
 
   function doLogin() {
     var user = nameField.text
@@ -32,134 +34,16 @@ Rectangle {
     }
   }
 
-  // --- Users: left panel ---
-  // NOTE: SDDM userModel roles are name/realName/icon — NOT Qt.DisplayRole,
-  // so delegates must use model.name (model.display is empty).
-  Rectangle {
-    id: leftPanel
-    anchors.left: parent.left
-    anchors.leftMargin: 24
-    anchors.verticalCenter: parent.verticalCenter
-    width: 220
-    height: 320
-    color: "#24283b"
-    radius: 8
-
-    Column {
-      anchors.fill: parent
-      anchors.margins: 12
-      spacing: 8
-      Text {
-        text: "users"
-        color: "#7aa2f7"
-        font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: 14
-      }
-      ListView {
-        id: userList
-        width: parent.width
-        height: parent.height - 30
-        clip: true
-        model: userModel
-        spacing: 4
-        delegate: Rectangle {
-          property string userName: (model.name !== undefined && model.name !== "") ? model.name : model.display
-          width: userList.width
-          height: 32
-          radius: 6
-          color: userList.currentIndex === index ? "#334155" : "transparent"
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            text: (model.realName !== undefined && model.realName !== "") ? model.realName : parent.userName
-            color: userList.currentIndex === index ? "#ffffff" : "#c0caf5"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            elide: Text.ElideRight
-            width: parent.width - 20
-          }
-          MouseArea {
-            anchors.fill: parent
-            onClicked: {
-              userList.currentIndex = index
-              nameField.text = parent.userName
-              root.loginFailed = false
-              password.focus = true
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // --- Sessions: right panel ---
-  Rectangle {
-    id: rightPanel
-    anchors.right: parent.right
-    anchors.rightMargin: 24
-    anchors.verticalCenter: parent.verticalCenter
-    width: 220
-    height: 320
-    color: "#24283b"
-    radius: 8
-
-    Column {
-      anchors.fill: parent
-      anchors.margins: 12
-      spacing: 8
-      Text {
-        text: "sessions"
-        color: "#7aa2f7"
-        font.family: "JetBrainsMono Nerd Font"
-        font.pixelSize: 14
-      }
-      ListView {
-        id: sessionList
-        width: parent.width
-        height: parent.height - 30
-        clip: true
-        model: sessionModel
-        currentIndex: sessionModel.lastIndex
-        spacing: 4
-        delegate: Rectangle {
-          property string sessionName: (model.name !== undefined && model.name !== "") ? model.name : model.display
-          width: sessionList.width
-          height: 32
-          radius: 6
-          color: sessionList.currentIndex === index ? "#334155" : "transparent"
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            text: parent.sessionName
-            color: sessionList.currentIndex === index ? "#ffffff" : "#c0caf5"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            elide: Text.ElideRight
-            width: parent.width - 20
-          }
-          MouseArea {
-            anchors.fill: parent
-            onClicked: {
-              sessionList.currentIndex = index
-              password.focus = true
-            }
-          }
-        }
-      }
-    }
-  }
-
   // --- Center: omarchy login ---
   Column {
+    id: loginColumn
     anchors.centerIn: parent
     spacing: 20
 
     Image {
       id: logo
       source: "logo.png"
-      width: 220
+      width: 280
       fillMode: Image.PreserveAspectFit
       anchors.horizontalCenter: parent.horizontalCenter
     }
@@ -250,6 +134,186 @@ Rectangle {
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
               doLogin()
               event.accepted = true
+            }
+          }
+        }
+      }
+    }
+
+    // Picker buttons: users and sessions live behind dropdowns.
+    Row {
+      id: pickerRow
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: 12
+
+      Rectangle {
+        id: userButton
+        width: 170
+        height: 34
+        radius: 6
+        color: root.userExpanded ? "#334155" : "#24283b"
+        Text {
+          anchors.centerIn: parent
+          text: (nameField.text !== "" ? nameField.text : "user") + " \u25BE"
+          color: "#c0caf5"
+          font.family: "JetBrainsMono Nerd Font"
+          font.pixelSize: 14
+          elide: Text.ElideRight
+          width: parent.width - 20
+          horizontalAlignment: Text.AlignHCenter
+        }
+        MouseArea {
+          anchors.fill: parent
+          onClicked: {
+            root.userExpanded = !root.userExpanded
+            root.sessionExpanded = false
+          }
+        }
+      }
+
+      Rectangle {
+        id: sessionButton
+        width: 170
+        height: 34
+        radius: 6
+        color: root.sessionExpanded ? "#334155" : "#24283b"
+        Text {
+          anchors.centerIn: parent
+          text: (sessionList.currentItem ? sessionList.currentItem.sessionName : "session") + " \u25BE"
+          color: "#c0caf5"
+          font.family: "JetBrainsMono Nerd Font"
+          font.pixelSize: 14
+          elide: Text.ElideRight
+          width: parent.width - 20
+          horizontalAlignment: Text.AlignHCenter
+        }
+        MouseArea {
+          anchors.fill: parent
+          onClicked: {
+            root.sessionExpanded = !root.sessionExpanded
+            root.userExpanded = false
+          }
+        }
+      }
+    }
+  }
+
+  // NOTE: SDDM userModel roles are name/realName/icon — NOT Qt.DisplayRole,
+  // so delegates must use model.name (model.display is empty).
+  Rectangle {
+    id: userDropdown
+    visible: root.userExpanded
+    width: 250
+    height: Math.min(userList.contentHeight + 62, 270)
+    color: "#24283b"
+    radius: 8
+    z: 10
+    anchors.top: pickerRow.bottom
+    anchors.topMargin: 8
+    anchors.horizontalCenter: userButton.horizontalCenter
+
+    Column {
+      anchors.fill: parent
+      anchors.margins: 12
+      spacing: 8
+      Text {
+        text: "users"
+        color: "#7aa2f7"
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 14
+      }
+      ListView {
+        id: userList
+        width: parent.width
+        height: parent.height - 30
+        clip: true
+        model: userModel
+        spacing: 4
+        delegate: Rectangle {
+          property string userName: (model.name !== undefined && model.name !== "") ? model.name : model.display
+          width: userList.width
+          height: 32
+          radius: 6
+          color: userList.currentIndex === index ? "#334155" : "transparent"
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            text: (model.realName !== undefined && model.realName !== "") ? model.realName : parent.userName
+            color: userList.currentIndex === index ? "#ffffff" : "#c0caf5"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 14
+            elide: Text.ElideRight
+            width: parent.width - 20
+          }
+          MouseArea {
+            anchors.fill: parent
+            onClicked: {
+              userList.currentIndex = index
+              nameField.text = parent.userName
+              root.loginFailed = false
+              root.userExpanded = false
+              password.focus = true
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Rectangle {
+    id: sessionDropdown
+    visible: root.sessionExpanded
+    width: 250
+    height: Math.min(sessionList.contentHeight + 62, 270)
+    color: "#24283b"
+    radius: 8
+    z: 10
+    anchors.top: pickerRow.bottom
+    anchors.topMargin: 8
+    anchors.horizontalCenter: sessionButton.horizontalCenter
+
+    Column {
+      anchors.fill: parent
+      anchors.margins: 12
+      spacing: 8
+      Text {
+        text: "sessions"
+        color: "#7aa2f7"
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 14
+      }
+      ListView {
+        id: sessionList
+        width: parent.width
+        height: parent.height - 30
+        clip: true
+        model: sessionModel
+        currentIndex: sessionModel.lastIndex
+        spacing: 4
+        delegate: Rectangle {
+          property string sessionName: (model.name !== undefined && model.name !== "") ? model.name : model.display
+          width: sessionList.width
+          height: 32
+          radius: 6
+          color: sessionList.currentIndex === index ? "#334155" : "transparent"
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            text: parent.sessionName
+            color: sessionList.currentIndex === index ? "#ffffff" : "#c0caf5"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 14
+            elide: Text.ElideRight
+            width: parent.width - 20
+          }
+          MouseArea {
+            anchors.fill: parent
+            onClicked: {
+              sessionList.currentIndex = index
+              root.sessionExpanded = false
+              password.focus = true
             }
           }
         }
