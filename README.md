@@ -37,7 +37,7 @@ password, and optionally grants sudo:
 
 - `--groups <g1,g2>` — supplementary groups (default: `wheel`); must exist.
 - `--sudo` — sudo with password; `--sudo-nopasswd` — passwordless sudo
-  (like the stock Omarchy users). Both write `/etc/sudoers.d/<name>`.
+  (if you use it that way). Both write `/etc/sudoers.d/<name>`.
 - `--skip-password` — don't touch the password (groups/sudo only).
 - Existing users are kept and just updated (groups re-applied).
 
