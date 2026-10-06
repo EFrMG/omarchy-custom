@@ -2,6 +2,8 @@
 
 SDDM theme cloned from Omarchy, with user list (left) and session list (right).
 
+![omarchy-custom greeter](preview.png)
+
 Repo: https://github.com/nightdevil00/omarchy-custom
 
 ## Install from git
