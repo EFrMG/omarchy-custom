@@ -1,0 +1,7 @@
+[SddmGreeterTheme]
+Name=Omarchy-Custom
+Description=Omarchy clone with user list (left) and session list (right)
+Author=mihai (cloned from Omarchy)
+Type=sddm-theme
+Version=1.1
+QtVersion=6
