@@ -21,6 +21,21 @@ Options:
 - `--keep-autologin` — don't remove `/etc/sddm.conf.d/autologin.conf`
 - `-h, --help` — usage
 
+## All-in-one: theme + user
+
+One call installs the theme, creates a user in the given groups, sets its
+password, and optionally grants sudo:
+
+```bash
+./install.sh --add-user alice --groups wheel --sudo
+```
+
+- `--groups <g1,g2>` — supplementary groups (default: `wheel`); must exist.
+- `--sudo` — sudo with password; `--sudo-nopasswd` — passwordless sudo
+  (like the stock Omarchy users). Both write `/etc/sudoers.d/<name>`.
+- `--skip-password` — don't touch the password (groups/sudo only).
+- Existing users are kept and just updated (groups re-applied).
+
 The script resolves theme sources relative to itself, so it works from any
 clone path. Existing installs are backed up to `/var/backups/omarchy-custom-sddm/`.
 

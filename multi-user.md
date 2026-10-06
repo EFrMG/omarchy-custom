@@ -43,7 +43,15 @@ sudo systemctl restart sddm
 
 ## 2. Add a new user
 
-Run from your existing admin account:
+Easiest — one call does theme (§1) + user + password + sudo:
+
+```bash
+./install.sh --add-user <username> --groups wheel --sudo
+```
+
+`--groups` defaults to `wheel`; `--sudo-nopasswd` gives passwordless sudo
+instead. Existing users are kept and just updated. Or manually, from your
+existing admin account:
 
 ```bash
 sudo useradd -m -s /usr/bin/bash <username>
@@ -63,7 +71,9 @@ id <username>
 
 ## 3. Sudo (if needed)
 
-On this machine `%wheel` in `/etc/sudoers` is **commented out** — sudo comes
+`./install.sh --add-user <username> --sudo` handles this for you (writes and
+validates `/etc/sudoers.d/<username>`). Manually, note: on this machine
+`%wheel` in `/etc/sudoers` is **commented out** — sudo comes
 from per-user drop-ins in `/etc/sudoers.d/` (e.g. `mihai`, `admin` contain
 `<user> ALL=(ALL) NOPASSWD: ALL`). Adding someone to `wheel` alone does
 **not** grant sudo. Pick one:
