@@ -71,3 +71,39 @@ written so they could be proposed upstream:
 
 Every destructive step confirms (bypass with `--yes`); every sudoers write is
 `visudo -c` validated. Run `--help` on any script for its usage.
+
+### Walkthrough (screenshots)
+
+Full run with a demo user, every screen captured in [`screenshots/`](screenshots/):
+
+**`omarchy-add-user`** — username prompt, group checklist, sudo level,
+summary confirm, password prompt, done:
+
+![username](screenshots/01-add-username.png)
+![groups](screenshots/02-add-groups.png)
+![sudo](screenshots/03-add-sudo.png)
+![confirm](screenshots/04-add-confirm.png)
+![password](screenshots/05-add-password.png)
+![done](screenshots/06-add-done.png)
+
+**`omarchy-set-privileges`** — pick user, pick level, confirm, done:
+
+![pick user](screenshots/07-priv-user.png)
+![pick level](screenshots/08-priv-level.png)
+![confirm](screenshots/09-priv-confirm.png)
+![done](screenshots/10-priv-done.png)
+
+**`omarchy-change-groups`** — pick user, checklist (preselected), before/after
+confirm, done:
+
+![pick user](screenshots/11-groups-user.png)
+![checklist](screenshots/12-groups-checklist.png)
+![confirm](screenshots/13-groups-confirm.png)
+![done](screenshots/14-groups-done.png)
+
+**`omarchy-remove-user`** — pick user, home choice, final confirm, done:
+
+![pick user](screenshots/15-remove-user.png)
+![home choice](screenshots/16-remove-home.png)
+![confirm](screenshots/17-remove-confirm.png)
+![done](screenshots/18-remove-done.png)

@@ -96,7 +96,7 @@ if [[ -z $USERNAME ]]; then
 fi
 
 entry=$(getent passwd "$USERNAME") || fail "no such user: $USERNAME"
-IFS=: read -r _ _ uid gid home _ <<<"$entry"
+IFS=: read -r _ _ uid gid _ home _ <<<"$entry"
 (( uid == 0 )) && fail "refusing to remove root"
 (( uid >= 1000 && uid < 60000 )) || fail "refusing to remove system account '$USERNAME' (UID $uid)"
 [[ $USERNAME != "${SUDO_USER:-$(whoami)}" ]] || fail "refusing to remove your own account"
