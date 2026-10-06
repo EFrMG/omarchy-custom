@@ -108,6 +108,7 @@ Rectangle {
       font.family: "JetBrainsMono Nerd Font"
       font.pixelSize: 14
       elide: Text.ElideRight
+      textFormat: Text.PlainText
       text: parent.modelItem.label
     }
   }
@@ -123,6 +124,7 @@ Rectangle {
       font.family: "JetBrainsMono Nerd Font"
       font.pixelSize: 14
       elide: Text.ElideRight
+      textFormat: Text.PlainText
       text: parent.modelItem.label
     }
   }
