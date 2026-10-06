@@ -91,7 +91,12 @@ if [[ -z $USERNAME ]]; then
   USERNAME=$(login_users | gum choose --header="Set privileges for which user?") || fail "cancelled"
   [[ -n $USERNAME ]] || fail "nothing selected"
 fi
-id "$USERNAME" &>/dev/null || fail "no such user: $USERNAME"
+entry=$(getent passwd "$USERNAME") || fail "no such user: $USERNAME"
+IFS=: read -r name _ uid _ <<<"$entry"
+[[ $name == "$USERNAME" ]] || fail "no such user: $USERNAME (use the login name, not a UID)"
+(( uid >= 1000 && uid < 60000 )) || fail "refusing to manage sudo for system account '$USERNAME' (UID $uid)"
+# sudo silently skips drop-ins whose name contains '.' or ends in '~'.
+[[ $USERNAME != *.* && $USERNAME != *~ ]] || fail "sudo ignores /etc/sudoers.d/$USERNAME ('.' or trailing '~' in the name)"
 
 if [[ -z $LEVEL ]]; then
   interactive || fail "--level is required (password, nopasswd, none)"
@@ -134,7 +139,15 @@ echo "  user:  $USERNAME"
 echo "  level: $LEVEL"
 confirm "Grant $LEVEL sudo to $USERNAME?" || fail "aborted"
 
-printf '%s\n' "$sudoers_line" | sudo tee "$sudoers_file" >/dev/null
-sudo chmod 440 -- "$sudoers_file"
+# Validate before installing: a broken drop-in in /etc/sudoers.d can
+# take sudo down for everyone.
+sudoers_tmp=$(mktemp)
+printf '%s\n' "$sudoers_line" >"$sudoers_tmp"
+if ! sudo visudo -cf "$sudoers_tmp" >/dev/null; then
+  rm -f -- "$sudoers_tmp"
+  fail "generated sudoers rule failed validation, nothing written"
+fi
+sudo install -m 0440 -o root -g root -- "$sudoers_tmp" "$sudoers_file"
+rm -f -- "$sudoers_tmp"
 sudo visudo -c
 echo "Sudo ($LEVEL) granted to $USERNAME via $sudoers_file."

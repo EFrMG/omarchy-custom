@@ -96,7 +96,10 @@ if [[ -z $USERNAME ]]; then
 fi
 
 entry=$(getent passwd "$USERNAME") || fail "no such user: $USERNAME"
-IFS=: read -r _ _ uid gid _ home _ <<<"$entry"
+IFS=: read -r name _ uid gid _ home _ <<<"$entry"
+# getent also resolves numeric UIDs; without this "1000" would slip past the
+# own-account check below and reach loginctl terminate-user.
+[[ $name == "$USERNAME" ]] || fail "no such user: $USERNAME (use the login name, not a UID)"
 (( uid == 0 )) && fail "refusing to remove root"
 (( uid >= 1000 && uid < 60000 )) || fail "refusing to remove system account '$USERNAME' (UID $uid)"
 [[ $USERNAME != "${SUDO_USER:-$(whoami)}" ]] || fail "refusing to remove your own account"

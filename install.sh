@@ -142,10 +142,12 @@ if sudo test -e "$DEST_DIR/Main.qml"; then
   run sudo cp -a -- "$DEST_DIR" "$backup"
 fi
 
-run sudo cp -a -- "$SRC_DIR/Main.qml" "$SRC_DIR/metadata.desktop" "$SRC_DIR/theme.conf" "$DEST_DIR/"
+# install (not cp -a): don't carry the checkout's owner, mode or symlinks
+# into a root-owned directory.
+run sudo install -m 0644 -o root -g root -- "$SRC_DIR/Main.qml" "$SRC_DIR/metadata.desktop" "$SRC_DIR/theme.conf" "$DEST_DIR/"
 for img in bullet.png entry.png entry-failed.png lock.png lock-failed.png logo.png; do
   if [[ -f "$SRC_DIR/$img" ]]; then
-    run sudo cp -a -- "$SRC_DIR/$img" "$DEST_DIR/"
+    run sudo install -m 0644 -o root -g root -- "$SRC_DIR/$img" "$DEST_DIR/"
   fi
 done
 run sudo chmod 755 -- "$DEST_DIR"
@@ -216,11 +218,19 @@ if [[ -n "$ADD_USER" ]]; then
     fi
     log "granting sudo to $ADD_USER via $sudoers_file"
     if [[ $DRY_RUN -eq 1 ]]; then
-      printf '+ printf %s | sudo tee %s && sudo chmod 440 %s && sudo visudo -c\n' \
-        "'$sudoers_line'" "$sudoers_file" "$sudoers_file" >&2
+      printf '+ visudo -cf <tmp with %s> && sudo install -m 0440 -o root -g root <tmp> %s && sudo visudo -c\n' \
+        "'$sudoers_line'" "$sudoers_file" >&2
     else
-      printf '%s\n' "$sudoers_line" | sudo tee "$sudoers_file" >/dev/null
-      sudo chmod 440 -- "$sudoers_file"
+      # Validate before installing: a broken drop-in in /etc/sudoers.d
+      # can take sudo down for everyone.
+      sudoers_tmp="$(mktemp)"
+      printf '%s\n' "$sudoers_line" >"$sudoers_tmp"
+      if ! sudo visudo -cf "$sudoers_tmp" >/dev/null; then
+        rm -f -- "$sudoers_tmp"
+        die "generated sudoers rule failed validation, nothing written"
+      fi
+      sudo install -m 0440 -o root -g root -- "$sudoers_tmp" "$sudoers_file"
+      rm -f -- "$sudoers_tmp"
       sudo visudo -c
     fi
   fi

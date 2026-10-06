@@ -181,8 +181,16 @@ if [[ $SUDO_ARG == "sudo" || $SUDO_ARG == "sudo-nopasswd" ]]; then
   else
     sudoers_line="$USERNAME ALL=(ALL) ALL"
   fi
-  printf '%s\n' "$sudoers_line" | sudo tee "$sudoers_file" >/dev/null
-  sudo chmod 440 -- "$sudoers_file"
+  # Validate before installing: a broken drop-in in /etc/sudoers.d can
+  # take sudo down for everyone.
+  sudoers_tmp=$(mktemp)
+  printf '%s\n' "$sudoers_line" >"$sudoers_tmp"
+  if ! sudo visudo -cf "$sudoers_tmp" >/dev/null; then
+    rm -f -- "$sudoers_tmp"
+    fail "generated sudoers rule failed validation, nothing written"
+  fi
+  sudo install -m 0440 -o root -g root -- "$sudoers_tmp" "$sudoers_file"
+  rm -f -- "$sudoers_tmp"
   sudo visudo -c
   echo "Sudo ($SUDO_ARG) granted via $sudoers_file."
 fi

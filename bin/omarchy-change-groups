@@ -139,7 +139,8 @@ if [[ -z $USERNAME ]]; then
   USERNAME=$(login_users | gum choose --header="Change groups for which user?") || fail "cancelled"
   [[ -n $USERNAME ]] || fail "nothing selected"
 fi
-id "$USERNAME" &>/dev/null || fail "no such user: $USERNAME"
+entry=$(getent passwd "$USERNAME") || fail "no such user: $USERNAME"
+[[ ${entry%%:*} == "$USERNAME" ]] || fail "no such user: $USERNAME (use the login name, not a UID)"
 
 current=$(supplementary_groups "$USERNAME")
 final=""
