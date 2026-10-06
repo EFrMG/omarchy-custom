@@ -27,3 +27,6 @@ Takes effect on next SDDM greeter (logout/reboot). Test now (logs you out):
 ```bash
 sudo systemctl restart sddm
 ```
+
+See [multi-user.md](multi-user.md) for multi-user setup: adding users with
+groups/sudo, disabling autologin, and troubleshooting.
