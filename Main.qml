@@ -9,9 +9,6 @@ Rectangle {
 
   property bool loginFailed: false
   property bool userPicked: false
-  // Login name comes only from the users dropdown (no username text field).
-  // QML cannot index a QAbstractListModel, so userModel is mirrored into a
-  // plain ListModel once at startup and read back with get(index).
   property string selectedName: (userCombo.index >= 0 && userCombo.index < userPickModel.count) ? userPickModel.get(userCombo.index).name : ""
 
   function selectLastUser() {
@@ -48,8 +45,6 @@ Rectangle {
     }
   }
 
-  // NOTE: SDDM userModel roles are name/realName/icon — NOT Qt.DisplayRole,
-  // so delegates must use model.name (model.display is empty).
   ListModel {
     id: userPickModel
     onCountChanged: selectLastUser()
@@ -70,14 +65,26 @@ Rectangle {
     }
   }
 
-  // Row delegate shared by the users ComboBox top row and its popup rows.
-  // parent is the ComboBox internal Loader, which carries modelItem.
   Component {
     id: userRow
     Text {
       anchors.fill: parent
       anchors.margins: 5
-      verticalAlignment: Text.AlignVCenter
+      verticalAlignment: Text.AlignVCentered
+      color: "#c0caf5"
+      font.family: "JetBrainsMono Nerd Font"
+      font.pixelSize: 14
+      elide: Text.ElideRight
+      text: parent.modelItem.label
+    }
+  }
+
+  Component {
+    id: userTopRow
+    Text {
+      anchors.fill: parent
+      anchors.margins: 5
+      verticalAlignment: Text.AlignVCentered
       color: "#c0caf5"
       font.family: "JetBrainsMono Nerd Font"
       font.pixelSize: 14
@@ -144,7 +151,7 @@ Rectangle {
           anchors.fill: parent
           anchors.leftMargin: 20
           anchors.rightMargin: 20
-          verticalAlignment: TextInput.AlignVCenter
+          verticalAlignment: TextInput.AlignVCentered
           echoMode: TextInput.Password
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 24
@@ -168,16 +175,13 @@ Rectangle {
       }
     }
 
-    // Native SDDM ComboBoxes, like elarun/maldives/maya use: each opens its
-    // list immediately underneath itself. The overlay chevron is purely
-    // visual (no MouseArea), so clicks pass through to the ComboBox.
     Row {
       id: pickerRow
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: 12
 
       Item {
-        width: 170
+        width: 220
         height: 34
 
         ComboBox {
@@ -194,21 +198,13 @@ Rectangle {
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
           rowDelegate: userRow
+          topRowDelegate: userTopRow
           onValueChanged: root.userPicked = true
-        }
-
-        Text {
-          anchors.right: parent.right
-          anchors.rightMargin: 10
-          anchors.verticalCenter: parent.verticalCenter
-          text: "\u25BC"
-          color: "#7aa2f7"
-          font.pixelSize: 12
         }
       }
 
       Item {
-        width: 170
+        width: 220
         height: 34
 
         ComboBox {
@@ -225,15 +221,6 @@ Rectangle {
           menuColor: "#24283b"
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
-        }
-
-        Text {
-          anchors.right: parent.right
-          anchors.rightMargin: 10
-          anchors.verticalCenter: parent.verticalCenter
-          text: "\u25BC"
-          color: "#7aa2f7"
-          font.pixelSize: 12
         }
       }
     }
