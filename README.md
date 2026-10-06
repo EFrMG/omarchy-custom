@@ -5,6 +5,10 @@ centered login.
 
 ![omarchy-custom greeter](preview-2.png)
 
+## Demo
+
+https://github.com/user-attachments/assets/da1df4d0-ea7e-420d-beaf-323579d93e03
+
 Repo: https://github.com/nightdevil00/omarchy-custom
 
 ## Install from git
