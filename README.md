@@ -3,7 +3,7 @@
 SDDM theme cloned from Omarchy, with user and session dropdowns under a
 centered login.
 
-![omarchy-custom greeter](preview.png)
+![omarchy-custom greeter](preview-2.png)
 
 Repo: https://github.com/nightdevil00/omarchy-custom
 
