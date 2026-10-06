@@ -27,10 +27,43 @@ Rectangle {
   function doLogin() {
     if (selectedName === "") {
       root.loginFailed = true
-      userCombo.focus = true
+      userCombo.forceActiveFocus()
       return
     }
     sddm.login(selectedName, password.text, sessionCombo.index)
+  }
+
+  function cycleIndex(combo, count, delta) {
+    if (count <= 0) {
+      return
+    }
+    var i = combo.index + delta
+    if (i < 0) {
+      i = count - 1
+    } else if (i >= count) {
+      i = 0
+    }
+    combo.index = i
+  }
+
+  function focusNext() {
+    if (password.activeFocus) {
+      userCombo.forceActiveFocus()
+    } else if (userCombo.activeFocus) {
+      sessionCombo.forceActiveFocus()
+    } else {
+      password.forceActiveFocus()
+    }
+  }
+
+  function focusPrev() {
+    if (password.activeFocus) {
+      sessionCombo.forceActiveFocus()
+    } else if (sessionCombo.activeFocus) {
+      userCombo.forceActiveFocus()
+    } else {
+      password.forceActiveFocus()
+    }
   }
 
   Connections {
@@ -38,7 +71,7 @@ Rectangle {
     function onLoginFailed() {
       root.loginFailed = true
       password.text = ""
-      password.focus = true
+      password.forceActiveFocus()
     }
     function onLoginSucceeded() {
       root.loginFailed = false
@@ -58,7 +91,7 @@ Rectangle {
         property string userLabel: (model.realName !== undefined && model.realName !== "") ? model.realName : userName
         Component.onCompleted: {
           if (userName !== undefined && userName !== "") {
-            userPickModel.append({ "name": userName, "label": userLabel })
+            userPickModel.append({ "display": userName, "name": userName, "label": userLabel })
           }
         }
       }
@@ -79,6 +112,7 @@ Rectangle {
     }
   }
 
+  // Unused (kept for reference): SDDM ComboBox only honors rowDelegate.
   Component {
     id: userTopRow
     Text {
@@ -129,6 +163,17 @@ Rectangle {
           anchors.centerIn: parent
         }
 
+        // Focus ring so you can tell the password box is active.
+        Rectangle {
+          id: passwordRing
+          anchors.fill: parent
+          anchors.margins: -4
+          color: "transparent"
+          radius: 8
+          border.width: 2
+          border.color: root.loginFailed ? "#f7768e" : (password.activeFocus ? "#7aa2f7" : "transparent")
+        }
+
         Row {
           anchors.left: parent.left
           anchors.leftMargin: 20
@@ -160,7 +205,14 @@ Rectangle {
           color: "transparent"
           selectionColor: "transparent"
           selectedTextColor: "transparent"
-          cursorDelegate: Item {}
+          activeFocusOnPress: true
+          cursorVisible: true
+          cursorDelegate: Rectangle {
+            width: 2
+            height: 22
+            color: "#7aa2f7"
+            visible: password.activeFocus
+          }
           focus: true
 
           onTextChanged: root.loginFailed = false
@@ -168,6 +220,19 @@ Rectangle {
           Keys.onPressed: {
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
               doLogin()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Tab) {
+              if (event.modifiers & Qt.ShiftModifier) {
+                focusPrev()
+              } else {
+                focusNext()
+              }
+              event.accepted = true
+            } else if (event.key === Qt.Key_Down) {
+              userCombo.forceActiveFocus()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Up) {
+              sessionCombo.forceActiveFocus()
               event.accepted = true
             }
           }
@@ -198,8 +263,38 @@ Rectangle {
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
           rowDelegate: userRow
-          topRowDelegate: userTopRow
           onValueChanged: root.userPicked = true
+          // NOTE: SDDM ComboBox already handles Up/Down internally on
+          // Keys.onPressed (moves highlight). Our outer handler would
+          // swallow it if we accept on Pressed, so: cycle the committed
+          // index on Pressed (works open AND closed, highlight follows
+          // via onIndexChanged), and do Enter-login on Released so an
+          // open dropdown commits first (inner close(true) on Pressed).
+          Keys.onPressed: {
+            if (event.key === Qt.Key_Tab) {
+              if (event.modifiers & Qt.ShiftModifier) {
+                focusPrev()
+              } else {
+                focusNext()
+              }
+              event.accepted = true
+            } else if (event.key === Qt.Key_Space) {
+              userCombo.toggle()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Down) {
+              cycleIndex(userCombo, userPickModel.count, 1)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Up) {
+              cycleIndex(userCombo, userPickModel.count, -1)
+              event.accepted = true
+            }
+          }
+          Keys.onReleased: {
+            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
+              doLogin()
+              event.accepted = true
+            }
+          }
         }
       }
 
@@ -221,6 +316,33 @@ Rectangle {
           menuColor: "#24283b"
           font.family: "JetBrainsMono Nerd Font"
           font.pixelSize: 14
+          // Same Up/Down + Enter rationale as userCombo above:
+          // cycle committed index on Pressed, login on Released.
+          Keys.onPressed: {
+            if (event.key === Qt.Key_Tab) {
+              if (event.modifiers & Qt.ShiftModifier) {
+                focusPrev()
+              } else {
+                focusNext()
+              }
+              event.accepted = true
+            } else if (event.key === Qt.Key_Space) {
+              sessionCombo.toggle()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Down) {
+              cycleIndex(sessionCombo, sessionModel.count, 1)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Up) {
+              cycleIndex(sessionCombo, sessionModel.count, -1)
+              event.accepted = true
+            }
+          }
+          Keys.onReleased: {
+            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
+              doLogin()
+              event.accepted = true
+            }
+          }
         }
       }
     }
