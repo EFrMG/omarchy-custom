@@ -28,16 +28,20 @@ Options:
 
 ## All-in-one: theme + user
 
-One call installs the theme, creates a user in the given groups, sets its
-password, and optionally grants sudo:
+One call installs the theme, creates a user, sets its password, and
+optionally adds groups and grants sudo. This example creates an administrator:
 
 ```bash
 ./install.sh --add-user alice --groups wheel --sudo
 ```
 
-- `--groups <g1,g2>` — supplementary groups (default: `wheel`); must exist.
+- `--groups <g1,g2>` — supplementary groups (default: none); must exist.
+  A plain user needs none. `wheel` makes the user an administrator: wheel
+  members can become root through polkit (`pkexec`, `run0`) with their own
+  password, with or without `--sudo`.
 - `--sudo` — sudo with password; `--sudo-nopasswd` — passwordless sudo
-  (if you use it that way). Both write `/etc/sudoers.d/<name>`.
+  (less secure; stock Omarchy asks for a password). Both write
+  `/etc/sudoers.d/<name>`.
 - `--skip-password` — don't touch the password (groups/sudo only).
 - Existing users are kept and just updated (groups re-applied).
 
@@ -61,7 +65,7 @@ written so they could be proposed upstream:
 
 | Script | Does |
 | ------ | ---- |
-| `bin/omarchy-add-user` | Create a user: gum prompts for name, group checklist, sudo level, then `passwd` |
+| `bin/omarchy-add-user` | Create a user: gum prompts for name, group checklist (none by default), sudo level, then `passwd` |
 | `bin/omarchy-remove-user` | Remove a user (never root/system/self), optionally home + managed sudo grant |
 | `bin/omarchy-set-privileges` | Set sudo level: `password`, `nopasswd`, or `none` (validated drop-in) |
 | `bin/omarchy-change-groups` | Change supplementary groups: checklist, `--add`, `--remove`, or `--set` |

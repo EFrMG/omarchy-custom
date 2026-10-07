@@ -15,9 +15,9 @@
 # User options (so one call does everything):
 #   --add-user <name>    create the user (or update groups if it exists)
 #                        and set its password via passwd
-#   --groups <g1,g2>     supplementary groups for the user (default: wheel)
+#   --groups <g1,g2>     supplementary groups (default: none; wheel = admin)
 #   --sudo               grant sudo with password (/etc/sudoers.d/<name>)
-#   --sudo-nopasswd      grant passwordless sudo (like stock Omarchy users)
+#   --sudo-nopasswd      grant passwordless sudo (less secure than --sudo)
 #   --skip-password      don't touch the password (groups/sudo only)
 #   -h, --help           this help
 #
@@ -63,7 +63,7 @@ DRY_RUN=0
 ENABLE=1
 KEEP_AUTOLOGIN=0
 ADD_USER=""
-USER_GROUPS="wheel"
+USER_GROUPS=""
 GROUPS_GIVEN=0
 GRANT_SUDO=0
 GRANT_SUDO_NOPASSWD=0
@@ -101,9 +101,11 @@ if [[ -n "$ADD_USER" ]] && ! [[ "$ADD_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
   die "invalid username: $ADD_USER (use lowercase letters, digits, _ or -)"
 fi
 if [[ -n "$ADD_USER" ]]; then
-  # Validate requested groups before touching the system.
+  # Validate requested groups before touching the system. An empty list is
+  # fine: a plain user needs no supplementary groups, and wheel makes the
+  # user a polkit administrator (root via pkexec/run0 with their own password).
   IFS=',' read -ra GROUP_ARR <<< "$USER_GROUPS"
-  for g in "${GROUP_ARR[@]}"; do
+  for g in ${GROUP_ARR[@]+"${GROUP_ARR[@]}"}; do
     [[ -n "$g" ]] || die "empty group name in --groups '$USER_GROUPS'"
     getent group "$g" >/dev/null || die "unknown group: $g (check with 'getent group <name>')"
   done
@@ -193,12 +195,17 @@ if [[ -n "$ADD_USER" ]]; then
   fi
   # Groups were validated upfront; just create/update here.
   if id "$ADD_USER" &>/dev/null; then
-    log "user $ADD_USER exists, updating groups to: $USER_GROUPS"
+    log "user $ADD_USER exists, adding groups: ${USER_GROUPS:-<none>}"
   else
-    log "creating user $ADD_USER (shell $USER_SHELL, groups $USER_GROUPS)"
+    log "creating user $ADD_USER (shell $USER_SHELL, groups ${USER_GROUPS:-<none>})"
     run sudo useradd -m -s "$USER_SHELL" "$ADD_USER"
   fi
-  run sudo usermod -aG "$USER_GROUPS" "$ADD_USER"
+  if [[ -n "$USER_GROUPS" ]]; then
+    run sudo usermod -aG "$USER_GROUPS" "$ADD_USER"
+  fi
+  if [[ ",$USER_GROUPS," == *,wheel,* ]]; then
+    log "note: wheel makes $ADD_USER an administrator (root via pkexec/run0 with their own password)"
+  fi
 
   if [[ $SKIP_PASSWORD -eq 1 ]]; then
     log "skipping password for $ADD_USER (--skip-password)"
@@ -236,7 +243,7 @@ if [[ -n "$ADD_USER" ]]; then
   fi
 
   if [[ $DRY_RUN -eq 1 ]]; then
-    log "dry-run: would create/update user $ADD_USER (groups $USER_GROUPS)"
+    log "dry-run: would create/update user $ADD_USER (groups ${USER_GROUPS:-<none>})"
   else
     log "user $ADD_USER ready: $(id "$ADD_USER")"
   fi

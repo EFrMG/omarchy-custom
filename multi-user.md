@@ -49,36 +49,40 @@ Easiest — one call does theme (§1) + user + password + sudo:
 ./install.sh --add-user <username> --groups wheel --sudo
 ```
 
-`--groups` defaults to `wheel`; `--sudo-nopasswd` gives passwordless sudo
-instead. Existing users are kept and just updated. Or manually, from your
-existing admin account:
+That creates an **administrator**. For a plain user, leave out `--groups`
+and `--sudo`: no supplementary groups is the default. `--sudo-nopasswd` gives
+passwordless sudo instead of `--sudo`. Existing users are kept and just
+updated. Or manually, from your existing admin account:
 
 ```bash
 sudo useradd -m -s /usr/bin/bash <username>
 sudo passwd <username>
-sudo usermod -aG wheel <username>
+sudo usermod -aG wheel <username>   # administrators only, see below
 id <username>
 # expect: uid=1001(<username>) gid=1001(<username>) groups=1001(<username>),998(wheel)
 ```
 
 - `-m` creates `/home/<username>` from `/etc/skel`.
 - `-s /usr/bin/bash` matches the shell of existing users here.
-- `wheel` is the desktop/admin group (existing users `mihai`, `admin` are both
-  in `wheel`). No audio/video/storage groups needed: PipeWire, logind, and
-  device access come from the systemd user session started via `uwsm`, not
-  static groups.
+- `wheel` is the admin group, so only add users you trust with root. Polkit
+  treats wheel members as administrators
+  (`/usr/share/polkit-1/rules.d/50-default.rules`), so they can become root
+  with their own password through `pkexec` or `run0`, with or without sudo.
+- A plain user needs no supplementary groups. No audio/video/storage groups
+  either: PipeWire, logind, and device access come from the systemd user
+  session started via `uwsm`, not static groups.
 - Account needs UID >= 1000, a password, and a valid shell, or SDDM won't list it.
 
 ## 3. Sudo (if needed)
 
 `./install.sh --add-user <username> --sudo` handles this for you (writes and
-validates `/etc/sudoers.d/<username>`). Manually, note: on this machine
-`%wheel` in `/etc/sudoers` is **commented out** — sudo comes
-from per-user drop-ins in `/etc/sudoers.d/` (e.g. `mihai`, `admin` contain
-`<user> ALL=(ALL) NOPASSWD: ALL`). Adding someone to `wheel` alone does
-**not** grant sudo. Pick one:
+validates `/etc/sudoers.d/<username>`). Manually, note: if `%wheel` in
+`/etc/sudoers` is commented out, sudo comes from per-user drop-ins in
+`/etc/sudoers.d/` (stock Omarchy creates `04_<user>` for the first user, with
+a password required). Adding someone to `wheel` alone then does **not** grant
+sudo, but it still makes them a polkit administrator (see §2). Pick one:
 
-**Option A — per-user file (matches this machine):**
+**Option A — per-user file:**
 
 ```bash
 echo '<username> ALL=(ALL) ALL' | sudo tee /etc/sudoers.d/<username>
@@ -86,8 +90,8 @@ sudo chmod 440 /etc/sudoers.d/<username>
 sudo visudo -c
 ```
 
-Use `ALL=(ALL) NOPASSWD: ALL` instead for passwordless sudo like the existing
-users — less secure, your call.
+Use `ALL=(ALL) NOPASSWD: ALL` instead for passwordless sudo — less secure
+(anything running as that user becomes root without asking), your call.
 
 **Option B — standard Arch `%wheel` (all wheel members get sudo):**
 
@@ -103,8 +107,8 @@ Verify:
 su - <username> -c 'sudo -l'
 ```
 
-Graphical privilege escalation (polkit) works automatically for local SDDM
-logins — no extra config.
+Graphical privilege escalation (polkit) needs no extra config: wheel members
+are asked for their own password, everyone else for an administrator's.
 
 ## 4. First login
 
