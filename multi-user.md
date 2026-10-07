@@ -123,6 +123,15 @@ Idempotent (rerun with `--force`). Run as the user, never as root. Sets up
 agent skills symlinks, `xdg-user-dirs`, default browser, and marks
 `~/.local/state/omarchy/done/finalize-user`.
 
+Omarchy assumes a single administrator, so a plain user (no `wheel`, no
+sudo) will notice two things. Both are Omarchy behaviour, not this theme's:
+
+- The "Update system" notification still appears, but a plain user cannot
+  run the update; an administrator has to.
+- Password prompts for system actions (polkit) expect an **administrator's**
+  password. The prompt does not say so, and a plain user's own password is
+  just reported as wrong.
+
 ## 5. Verify
 
 ```bash
