@@ -61,12 +61,15 @@ managed_sudoers_file() {
   return 1
 }
 
-other_wheel_admin_exists() {
+# Another login user counts as an administrator through wheel or any
+# effective sudo grant.
+other_admin_exists() {
   local candidate groups
   while IFS= read -r candidate; do
     [[ $candidate != "$USERNAME" ]] || continue
-    groups=$(id -nG "$candidate") || continue
+    groups=$(id -nG "$candidate") || groups=""
     [[ " $groups " == *" wheel "* ]] && return 0
+    sudo -l -U "$candidate" >/dev/null 2>&1 && return 0
   done < <(login_users)
   return 1
 }
@@ -92,9 +95,11 @@ while (( $# > 0 )); do
     echo "Sets a user's sudo level through a validated /etc/sudoers.d/<username>"
     echo "drop-in: password sudo, passwordless sudo, or no sudo grant."
     echo "'none' removes only a drop-in containing exactly one managed rule,"
-    echo "then checks whether another sudo rule still grants access."
-    echo "Removing your own sudo, or removing sudo when no wheel administrator"
-    echo "would remain, needs --force-lockout, even with --yes."
+    echo "then reports whether another sudo rule still grants access, no"
+    echo "sudo access remains, or the check could not be completed."
+    echo "Removing your own sudo, or removing sudo when no other administrator"
+    echo "(wheel member or sudo grant) would remain, needs --force-lockout,"
+    echo "even with --yes."
     echo
     echo "With no arguments it walks you through each step with gum."
     exit 0
@@ -147,10 +152,10 @@ if [[ $LEVEL == "none" ]]; then
       fail "$sudoers_file is not exactly one managed rule for $USERNAME. Inspect it with 'sudo visudo -f $sudoers_file' before changing this account"
     if (( ! FORCE_LOCKOUT )); then
       [[ $USERNAME != "${SUDO_USER:-$(id -un)}" ]] ||
-        fail "refusing to remove your own sudo. Sign in as another wheel administrator, or use --force-lockout only with a recovery path"
+        fail "refusing to remove your own sudo. Sign in as another administrator, or use --force-lockout only with a recovery path"
       groups=$(id -nG "$USERNAME") || fail "cannot read groups for $USERNAME"
-      if [[ " $groups " != *" wheel "* ]] && ! other_wheel_admin_exists; then
-        fail "no wheel administrator would remain. Add another login user to wheel first, or use --force-lockout only with a recovery path"
+      if [[ " $groups " != *" wheel "* ]] && ! other_admin_exists; then
+        fail "no other administrator would remain. Add another login user to wheel first, or use --force-lockout only with a recovery path"
       fi
     fi
     echo "About to remove managed sudo grant $sudoers_file."
@@ -162,14 +167,17 @@ if [[ $LEVEL == "none" ]]; then
   else
     echo "$USERNAME has no managed sudoers drop-in; nothing to remove."
   fi
-  if sudo_list=$(sudo -l -U "$USERNAME" 2>&1); then
+  # LC_ALL=C keeps sudo's "not allowed" wording matchable.
+  if sudo_list=$(LC_ALL=C sudo -l -U "$USERNAME" 2>&1); then
     echo "WARNING: $USERNAME still has effective sudo privileges from another rule." >&2
     printf '%s\n' "$sudo_list" >&2
     echo "Next: review /etc/sudoers and /etc/sudoers.d as an administrator, change the other grant with visudo, then run 'sudo -l -U $USERNAME' again." >&2
+  elif [[ $sudo_list == *"is not allowed to run sudo"* ]]; then
+    echo "Confirmed: no sudo access remains for $USERNAME."
   else
-    echo "sudo -l -U $USERNAME did not report an effective grant (or could not complete):" >&2
+    echo "Could not verify whether $USERNAME still has sudo access. 'sudo -l -U $USERNAME' reported:" >&2
     printf '%s\n' "$sudo_list" >&2
-    echo "If this was an authentication or policy error, retry 'sudo -l -U $USERNAME' from a root or other administrator session." >&2
+    echo "Next: run 'sudo -l -U $USERNAME' from a root or other administrator session before assuming access was removed." >&2
   fi
   exit 0
 fi

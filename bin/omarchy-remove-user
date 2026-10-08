@@ -60,12 +60,15 @@ managed_sudoers_file() {
   return 1
 }
 
-other_wheel_admin_exists() {
+# Another login user counts as an administrator through wheel or any
+# effective sudo grant.
+other_admin_exists() {
   local candidate groups
   while IFS= read -r candidate; do
     [[ $candidate != "$USERNAME" ]] || continue
-    groups=$(id -nG "$candidate") || continue
+    groups=$(id -nG "$candidate") || groups=""
     [[ " $groups " == *" wheel "* ]] && return 0
+    sudo -l -U "$candidate" >/dev/null 2>&1 && return 0
   done < <(login_users)
   return 1
 }
@@ -96,7 +99,8 @@ while (( $# > 0 )); do
     echo "Removes a login user. Never touches root, system accounts (UID < 1000),"
     echo "or the account running this script. A sudoers drop-in is removed only"
     echo "when it contains exactly one managed rule. An unfamiliar file stops"
-    echo "removal. Removing the last wheel administrator needs --force-lockout."
+    echo "removal before the account is touched. Removing the last"
+    echo "administrator (wheel member or sudo grant) needs --force-lockout."
     echo
     echo "With no arguments it lets you pick the user with gum."
     exit 0
@@ -138,8 +142,8 @@ fi
 
 groups=$(id -nG "$USERNAME") || fail "cannot read groups for $USERNAME"
 if [[ " $groups " == *" wheel "* ]] || sudo -l -U "$USERNAME" >/dev/null 2>&1; then
-  if (( ! FORCE_LOCKOUT )) && ! other_wheel_admin_exists; then
-    fail "no other wheel administrator found. Add another login user to wheel first, or use --force-lockout only with a recovery path"
+  if (( ! FORCE_LOCKOUT )) && ! other_admin_exists; then
+    fail "no other administrator found. Add another login user to wheel first, or use --force-lockout only with a recovery path"
   fi
 fi
 
@@ -162,6 +166,12 @@ echo "  user: $USERNAME (UID $uid)"
 echo "  home: $home ($HOME_MODE)"
 confirm "Remove user $USERNAME? This cannot be undone." || fail "aborted"
 
+# Recheck before userdel so a changed file aborts with the account intact.
+if sudo test -e "$sudoers_file" || sudo test -L "$sudoers_file"; then
+  managed_sudoers_file "$sudoers_file" "$USERNAME" ||
+    fail "$sudoers_file changed; inspect it with 'sudo visudo -f $sudoers_file' before retrying. The account was not removed"
+fi
+
 # Log the user out first so userdel doesn't fail on a live session.
 sudo loginctl terminate-user "$USERNAME" >/dev/null 2>&1 || true
 
@@ -171,12 +181,15 @@ else
   sudo userdel -- "$USERNAME"
 fi
 
-# Recheck before deletion; a changed file must never be removed as ours.
+# A changed file must never be removed as ours, but the account is already
+# gone, so warn instead of failing.
 if sudo test -e "$sudoers_file" || sudo test -L "$sudoers_file"; then
-  managed_sudoers_file "$sudoers_file" "$USERNAME" ||
-    fail "$sudoers_file changed after the account was removed. Inspect it with 'sudo visudo -f $sudoers_file' before reusing this login name"
-  sudo rm -- "$sudoers_file"
-  echo "Removed managed sudo grant $sudoers_file."
+  if managed_sudoers_file "$sudoers_file" "$USERNAME"; then
+    sudo rm -- "$sudoers_file"
+    echo "Removed managed sudo grant $sudoers_file."
+  else
+    echo "WARNING: $sudoers_file changed while the account was being removed and was left in place. Inspect it with 'sudo visudo -f $sudoers_file' before reusing this login name." >&2
+  fi
 fi
 
 id "$USERNAME" &>/dev/null && fail "user '$USERNAME' still exists"

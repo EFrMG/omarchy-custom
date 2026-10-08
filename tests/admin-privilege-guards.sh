@@ -59,13 +59,22 @@ case $cmd in
   -l)
     [[ $1 == -U ]] || exit 2
     user=$2
-    if [[ -e "$TEST_FIXTURE/sudoers/$user" || ${TEST_EXTERNAL_SUDO:-} == "$user" ]]; then
+    if [[ -n ${TEST_SUDO_L_ERROR:-} ]]; then
+      echo 'sudo: a password is required' >&2
+      exit 1
+    elif [[ -e "$TEST_FIXTURE/sudoers/$user" || ${TEST_EXTERNAL_SUDO:-} == "$user" ]]; then
       echo "User $user may run commands via sudo"
     else
+      echo "User $user is not allowed to run sudo on host."
       exit 1
     fi ;;
   usermod) printf 'usermod %s\n' "$*" >>"$TEST_FIXTURE/actions" ;;
-  userdel) touch "$TEST_FIXTURE/deleted-${*: -1}" ;;
+  userdel)
+    user=${*: -1}
+    if [[ -n ${TEST_USERDEL_TAMPER:-} ]]; then
+      echo 'mallory ALL=(ALL) ALL' >>"$TEST_FIXTURE/sudoers/$user"
+    fi
+    touch "$TEST_FIXTURE/deleted-$user" ;;
   loginctl|visudo) : ;;
   *) echo "unexpected sudo command: $cmd $*" >&2; exit 2 ;;
 esac
@@ -74,7 +83,7 @@ chmod +x "$fixture/mock/"*
 
 reset_fixture() {
   rm -f -- "$fixture/sudoers/"* "$fixture/actions" "$fixture/deleted-"* 2>/dev/null || true
-  export TEST_ACTOR=carol TEST_ALICE_WHEEL=1 TEST_BOB_WHEEL=1 TEST_EXTERNAL_SUDO=
+  export TEST_ACTOR=carol TEST_ALICE_WHEEL=1 TEST_BOB_WHEEL=1 TEST_EXTERNAL_SUDO= TEST_USERDEL_TAMPER= TEST_SUDO_L_ERROR=
   unset SUDO_USER || true
 }
 expect_failure() {
@@ -115,7 +124,7 @@ expect_failure 'refusing to remove your own sudo' "$repo/bin/omarchy-set-privile
 reset_fixture
 printf 'bob ALL=(ALL) ALL\n' >"$fixture/sudoers/bob"
 export TEST_ALICE_WHEEL=0 TEST_BOB_WHEEL=0
-expect_failure 'no wheel administrator would remain' "$repo/bin/omarchy-set-privileges" bob --level none --yes
+expect_failure 'no other administrator would remain' "$repo/bin/omarchy-set-privileges" bob --level none --yes
 [[ -f $fixture/sudoers/bob ]]
 
 reset_fixture
@@ -133,6 +142,23 @@ grep -Fq 'nothing to remove' "$fixture/out"
 grep -Fq 'still has effective sudo privileges' "$fixture/out"
 
 reset_fixture
+managed_rule
+expect_success "$repo/bin/omarchy-set-privileges" alice --level none --yes
+grep -Fq 'no sudo access remains for alice' "$fixture/out"
+[[ ! -e $fixture/sudoers/alice ]]
+
+reset_fixture
+managed_rule
+export TEST_SUDO_L_ERROR=1
+# A failed check is inconclusive, not a confirmation; the removal still stands.
+expect_success "$repo/bin/omarchy-set-privileges" alice --level none --yes
+grep -Fq 'Could not verify' "$fixture/out"
+grep -Fq 'sudo: a password is required' "$fixture/out"
+grep -Fq "run 'sudo -l -U alice' from a root or other administrator session" "$fixture/out"
+grep -Fq 'no sudo access remains' "$fixture/out" && { cat "$fixture/out" >&2; exit 1; }
+[[ ! -e $fixture/sudoers/alice ]]
+
+reset_fixture
 export SUDO_USER=alice
 expect_failure 'refusing to remove your own wheel membership' "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
 [[ ! -e $fixture/actions ]]
@@ -140,12 +166,38 @@ expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes --fo
 [[ -s $fixture/actions ]]
 
 reset_fixture
+managed_rule
+export SUDO_USER=alice
+# The managed drop-in keeps alice an administrator, so the guard is skipped.
+expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
+grep -Fq 'usermod' "$fixture/actions"
+
+reset_fixture
 export TEST_BOB_WHEEL=0
-expect_failure 'no other wheel administrator' "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
+expect_failure 'no other administrator found' "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
 [[ ! -e $fixture/actions ]]
-expect_failure 'no other wheel administrator' "$repo/bin/omarchy-remove-user" alice --yes
+expect_failure 'no other administrator found' "$repo/bin/omarchy-remove-user" alice --yes
 [[ ! -e $fixture/deleted-alice ]]
 expect_success "$repo/bin/omarchy-remove-user" alice --yes --force-lockout
 [[ -e $fixture/deleted-alice ]]
+
+reset_fixture
+printf 'bob ALL=(ALL) ALL\n' >"$fixture/sudoers/bob"
+export TEST_BOB_WHEEL=0
+# A sudo drop-in alone makes bob the other administrator.
+expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
+[[ -s $fixture/actions ]]
+expect_success "$repo/bin/omarchy-remove-user" alice --yes
+[[ -e $fixture/deleted-alice ]]
+
+reset_fixture
+managed_rule
+export TEST_USERDEL_TAMPER=1
+# The file changes during userdel: warn and leave it, but finish the removal.
+expect_success "$repo/bin/omarchy-remove-user" alice --yes
+grep -Fq 'WARNING: /etc/sudoers.d/alice changed' "$fixture/out"
+grep -Fq 'sudo visudo -f /etc/sudoers.d/alice' "$fixture/out"
+grep -Fq 'Removed alice.' "$fixture/out"
+[[ -f $fixture/sudoers/alice && -e $fixture/deleted-alice ]]
 
 echo 'admin privilege guards passed'
