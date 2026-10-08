@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # omarchy:summary=Change a user's supplementary groups (pick, add, remove, or set)
-# omarchy:args=[username] [--add g1,g2] [--remove g1,g2] [--set g1,g2] [--yes]
+# omarchy:args=[username] [--add g1,g2] [--remove g1,g2] [--set g1,g2] [--yes] [--force-lockout]
 # omarchy:examples=omarchy-change-groups | omarchy-change-groups alice --add docker --yes
 
 set -euo pipefail
 
 PROG="omarchy-change-groups"
 ASSUME_YES=0
+FORCE_LOCKOUT=0
 USERNAME=""
 ADD_ARG=""
 REMOVE_ARG=""
@@ -47,6 +48,16 @@ need_gum() {
 
 login_users() {
   getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1 }' | sort
+}
+
+other_wheel_admin_exists() {
+  local candidate groups
+  while IFS= read -r candidate; do
+    [[ $candidate != "$USERNAME" ]] || continue
+    groups=$(id -nG "$candidate") || continue
+    [[ " $groups " == *" wheel "* ]] && return 0
+  done < <(login_users)
+  return 1
 }
 
 CURATED_GROUPS="wheel video audio optical storage input scanner network power uucp docker"
@@ -110,14 +121,20 @@ while (( $# > 0 )); do
     ASSUME_YES=1
     shift
     ;;
+  --force-lockout)
+    FORCE_LOCKOUT=1
+    shift
+    ;;
   -h | --help)
-    echo "Usage: $PROG [username] [--add g1,g2] [--remove g1,g2] [--set g1,g2] [--yes]"
+    echo "Usage: $PROG [username] [--add g1,g2] [--remove g1,g2] [--set g1,g2] [--yes] [--force-lockout]"
     echo
     echo "Changes a user's supplementary groups. The primary group is never"
     echo "touched. --add/--remove adjust the current set, --set replaces it."
     echo
     echo "With no group flags it shows a gum checklist preselected with the"
     echo "user's current groups; the checked set becomes the new set."
+    echo "Removing your own wheel membership or the last wheel administrator"
+    echo "needs --force-lockout, even with --yes."
     exit 0
     ;;
   -*)
@@ -182,6 +199,14 @@ echo "  after:  ${final:-<none>}"
 current_csv=$(printf '%s' "$current" | tr ' ' '\n' | awk NF | sort | tr '\n' ',')
 final_csv=$(printf '%s' "$final" | tr ',' '\n' | awk NF | sort | tr '\n' ',')
 [[ "$current_csv" != "$final_csv" ]] || fail "no change - groups already match"
+if [[ " $current " == *" wheel "* && ",$final," != *,wheel,* ]]; then
+  if (( ! FORCE_LOCKOUT )); then
+    [[ $USERNAME != "${SUDO_USER:-$(id -un)}" ]] ||
+      fail "refusing to remove your own wheel membership. Sign in as another wheel administrator, or use --force-lockout only with a recovery path"
+    other_wheel_admin_exists ||
+      fail "no other wheel administrator found. Add another login user to wheel first, or use --force-lockout only with a recovery path"
+  fi
+fi
 confirm "Apply this group change?" || fail "aborted"
 
 # -G replaces the supplementary set; the primary group is unaffected.
