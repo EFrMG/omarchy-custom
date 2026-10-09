@@ -84,7 +84,8 @@ exactly one rule they recognize. `omarchy-set-privileges --level none` also
 checks effective sudo access afterward: it warns if another rule still grants
 it, confirms when none remains, and says so when it could not verify.
 Removing your own sudo or `wheel` membership, or the last administrator (a
-login user in `wheel` or with a sudo grant), needs a separate
+login user in `wheel` or with an unrestricted sudo grant; a rule limited to
+some commands does not count), needs a separate
 `--force-lockout` flag; `--yes` alone does not bypass that guard. Removing
 `wheel` is not blocked for a user who keeps sudo through their own managed
 drop-in. Run `--help` on any script for its usage.
@@ -104,6 +105,9 @@ drop-in. Run `--help` on any script for its usage.
   file changed while the account was being removed, so the tool did not delete
   it. The account is gone; inspect the file with `sudo visudo -f <file>` and
   remove it manually before reusing that login name.
+- **`omarchy-add-user` refuses because a sudoers file already exists:** A
+  drop-in left under that name would give the new account sudo. Inspect it
+  with `sudo visudo -f <file>`, remove it, then create the user.
 - **A lockout guard stops a change:** Add another login user to `wheel` and
   verify that account can administer the machine, then retry. For your own
   sudo or `wheel` removal, make the change from that other account. Use

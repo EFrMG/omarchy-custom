@@ -61,15 +61,23 @@ managed_sudoers_file() {
   return 1
 }
 
-# Another login user counts as an administrator through wheel or any
-# effective sudo grant.
+# Only an unrestricted rule such as "(ALL) ALL" or "(ALL : ALL) NOPASSWD: ALL"
+# counts; a grant limited to some commands does not make an administrator.
+full_sudo_grant() {
+  local list
+  list=$(LC_ALL=C sudo -l -U "$1" 2>/dev/null) || return 1
+  grep -Eq '^[[:space:]]*\((ALL|root)([[:space:]]*:[^)]*)?\)[[:space:]]+([A-Z]+:[[:space:]]*)*ALL[[:space:]]*$' <<<"$list"
+}
+
+# Another login user counts as an administrator through wheel or an
+# unrestricted sudo grant.
 other_admin_exists() {
   local candidate groups
   while IFS= read -r candidate; do
     [[ $candidate != "$USERNAME" ]] || continue
     groups=$(id -nG "$candidate") || groups=""
     [[ " $groups " == *" wheel "* ]] && return 0
-    sudo -l -U "$candidate" >/dev/null 2>&1 && return 0
+    full_sudo_grant "$candidate" && return 0
   done < <(login_users)
   return 1
 }
@@ -98,7 +106,7 @@ while (( $# > 0 )); do
     echo "then reports whether another sudo rule still grants access, no"
     echo "sudo access remains, or the check could not be completed."
     echo "Removing your own sudo, or removing sudo when no other administrator"
-    echo "(wheel member or sudo grant) would remain, needs --force-lockout,"
+    echo "(wheel member or full sudo grant) would remain, needs --force-lockout,"
     echo "even with --yes."
     echo
     echo "With no arguments it walks you through each step with gum."

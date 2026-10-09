@@ -63,15 +63,23 @@ managed_sudoers_file() {
   return 1
 }
 
-# Another login user counts as an administrator through wheel or any
-# effective sudo grant.
+# Only an unrestricted rule such as "(ALL) ALL" or "(ALL : ALL) NOPASSWD: ALL"
+# counts; a grant limited to some commands does not make an administrator.
+full_sudo_grant() {
+  local list
+  list=$(LC_ALL=C sudo -l -U "$1" 2>/dev/null) || return 1
+  grep -Eq '^[[:space:]]*\((ALL|root)([[:space:]]*:[^)]*)?\)[[:space:]]+([A-Z]+:[[:space:]]*)*ALL[[:space:]]*$' <<<"$list"
+}
+
+# Another login user counts as an administrator through wheel or an
+# unrestricted sudo grant.
 other_admin_exists() {
   local candidate groups
   while IFS= read -r candidate; do
     [[ $candidate != "$USERNAME" ]] || continue
     groups=$(id -nG "$candidate") || groups=""
     [[ " $groups " == *" wheel "* ]] && return 0
-    sudo -l -U "$candidate" >/dev/null 2>&1 && return 0
+    full_sudo_grant "$candidate" && return 0
   done < <(login_users)
   return 1
 }
@@ -150,9 +158,9 @@ while (( $# > 0 )); do
     echo "With no group flags it shows a gum checklist preselected with the"
     echo "user's current groups; the checked set becomes the new set."
     echo "Removing your own wheel membership, or wheel from the last"
-    echo "administrator (wheel member or sudo grant), needs --force-lockout,"
-    echo "even with --yes. A user who keeps sudo through a managed"
-    echo "/etc/sudoers.d/<username> drop-in is not blocked."
+    echo "administrator (wheel member or full sudo grant), needs"
+    echo "--force-lockout, even with --yes. A user who keeps sudo through a"
+    echo "managed /etc/sudoers.d/<username> drop-in is not blocked."
     exit 0
     ;;
   -*)
@@ -218,8 +226,13 @@ current_csv=$(printf '%s' "$current" | tr ' ' '\n' | awk NF | sort | tr '\n' ','
 final_csv=$(printf '%s' "$final" | tr ',' '\n' | awk NF | sort | tr '\n' ',')
 [[ "$current_csv" != "$final_csv" ]] || fail "no change - groups already match"
 if [[ " $current " == *" wheel "* && ",$final," != *,wheel,* ]]; then
-  # A managed sudo drop-in keeps the user an administrator without wheel.
-  if (( ! FORCE_LOCKOUT )) && ! managed_sudoers_file "/etc/sudoers.d/$USERNAME" "$USERNAME"; then
+  # A managed sudo drop-in keeps the user an administrator without wheel,
+  # unless sudo skips it ('.' in the name or a trailing '~').
+  keeps_sudo=0
+  if [[ $USERNAME != *.* && $USERNAME != *~ ]] && managed_sudoers_file "/etc/sudoers.d/$USERNAME" "$USERNAME"; then
+    keeps_sudo=1
+  fi
+  if (( ! FORCE_LOCKOUT && ! keeps_sudo )); then
     [[ $USERNAME != "${SUDO_USER:-$(id -un)}" ]] ||
       fail "refusing to remove your own wheel membership. Sign in as another administrator, or use --force-lockout only with a recovery path"
     other_admin_exists ||
