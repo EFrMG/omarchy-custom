@@ -50,19 +50,6 @@ login_users() {
   getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1 }' | sort
 }
 
-# A managed file contains exactly one of the rules these tools write, including
-# its final newline. Do not mistake a matching line in a larger file for ours.
-managed_sudoers_file() {
-  local file=$1 user=$2 rule
-  sudo test -f "$file" && ! sudo test -L "$file" || return 1
-  for rule in "$user ALL=(ALL) ALL" "$user ALL=(ALL) NOPASSWD: ALL"; do
-    if sudo cat -- "$file" | cmp -s - <(printf '%s\n' "$rule"); then
-      return 0
-    fi
-  done
-  return 1
-}
-
 # Only an unrestricted rule such as "(ALL) ALL" or "(ALL : ALL) NOPASSWD: ALL"
 # counts; a grant limited to some commands does not make an administrator.
 full_sudo_grant() {
@@ -159,8 +146,7 @@ while (( $# > 0 )); do
     echo "user's current groups; the checked set becomes the new set."
     echo "Removing your own wheel membership, or wheel from the last"
     echo "administrator (wheel member or full sudo grant), needs"
-    echo "--force-lockout, even with --yes. A user who keeps sudo through a"
-    echo "managed /etc/sudoers.d/<username> drop-in is not blocked."
+    echo "--force-lockout, even with --yes or a managed sudo drop-in."
     exit 0
     ;;
   -*)
@@ -226,13 +212,9 @@ current_csv=$(printf '%s' "$current" | tr ' ' '\n' | awk NF | sort | tr '\n' ','
 final_csv=$(printf '%s' "$final" | tr ',' '\n' | awk NF | sort | tr '\n' ',')
 [[ "$current_csv" != "$final_csv" ]] || fail "no change - groups already match"
 if [[ " $current " == *" wheel "* && ",$final," != *,wheel,* ]]; then
-  # A managed sudo drop-in keeps the user an administrator without wheel,
-  # unless sudo skips it ('.' in the name or a trailing '~').
-  keeps_sudo=0
-  if [[ $USERNAME != *.* && $USERNAME != *~ ]] && managed_sudoers_file "/etc/sudoers.d/$USERNAME" "$USERNAME"; then
-    keeps_sudo=1
-  fi
-  if (( ! FORCE_LOCKOUT && ! keeps_sudo )); then
+  # A drop-in or a successful sudo check cannot prove that access survives
+  # removing wheel: sudo may ignore the file or grant access through wheel.
+  if (( ! FORCE_LOCKOUT )); then
     [[ $USERNAME != "${SUDO_USER:-$(id -un)}" ]] ||
       fail "refusing to remove your own wheel membership. Sign in as another administrator, or use --force-lockout only with a recovery path"
     other_admin_exists ||

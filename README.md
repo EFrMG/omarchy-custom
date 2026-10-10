@@ -44,6 +44,8 @@ optionally adds groups and grants sudo. This example creates an administrator:
   `/etc/sudoers.d/<name>`.
 - `--skip-password` — don't touch the password (groups/sudo only).
 - Existing users are kept and just updated (groups re-applied).
+- New users are refused if `/etc/sudoers.d/<name>` already exists, even
+  without a sudo flag; inspect and remove the stale file first.
 
 The script resolves theme sources relative to itself, so it works from any
 clone path. Existing installs are backed up to `/var/backups/omarchy-custom-sddm/`.
@@ -86,9 +88,7 @@ it, confirms when none remains, and says so when it could not verify.
 Removing your own sudo or `wheel` membership, or the last administrator (a
 login user in `wheel` or with an unrestricted sudo grant; a rule limited to
 some commands does not count), needs a separate
-`--force-lockout` flag; `--yes` alone does not bypass that guard. Removing
-`wheel` is not blocked for a user who keeps sudo through their own managed
-drop-in. Run `--help` on any script for its usage.
+`--force-lockout` flag; `--yes` alone does not bypass that guard. These guards also apply when the user has a managed sudo drop-in. Run `--help` on any script for its usage.
 
 ### Handling privilege warnings
 

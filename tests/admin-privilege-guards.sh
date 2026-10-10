@@ -174,8 +174,8 @@ expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes --fo
 reset_fixture
 managed_rule
 export SUDO_USER=alice
-# The managed drop-in keeps alice an administrator, so the guard is skipped.
-expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes
+# Explicitly allow wheel removal when a managed drop-in exists.
+expect_success "$repo/bin/omarchy-change-groups" alice --remove wheel --yes --force-lockout
 grep -Fq 'usermod' "$fixture/actions"
 
 reset_fixture

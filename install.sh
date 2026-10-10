@@ -126,11 +126,16 @@ fi
 
 # Check before changing the theme or account so an unrelated sudoers file
 # cannot turn a combined install into a partial update.
-if [[ -n "$ADD_USER" && ( $GRANT_SUDO -eq 1 || $GRANT_SUDO_NOPASSWD -eq 1 ) ]]; then
+if [[ -n "$ADD_USER" ]]; then
   sudoers_file="/etc/sudoers.d/$ADD_USER"
   if sudo test -e "$sudoers_file" || sudo test -L "$sudoers_file"; then
-    managed_sudoers_file "$sudoers_file" "$ADD_USER" ||
-      die "$sudoers_file is not exactly one managed rule for $ADD_USER. Inspect it with 'sudo visudo -f $sudoers_file'; omit --sudo/--sudo-nopasswd to install without changing sudo"
+    if ! id "$ADD_USER" &>/dev/null; then
+      die "$sudoers_file already exists and would apply to the new account. Inspect it with 'sudo visudo -f $sudoers_file' and remove it before creating $ADD_USER"
+    fi
+    if (( GRANT_SUDO || GRANT_SUDO_NOPASSWD )); then
+      managed_sudoers_file "$sudoers_file" "$ADD_USER" ||
+        die "$sudoers_file is not exactly one managed rule for $ADD_USER. Inspect it with 'sudo visudo -f $sudoers_file'; omit --sudo/--sudo-nopasswd to install without changing sudo"
+    fi
   fi
 fi
 
